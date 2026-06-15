@@ -1,0 +1,5 @@
+# generated build artifacts
+vmlinux.h
+hello.skel.h
+*.o
+hello

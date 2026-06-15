@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+// SPDX-License-Identifier: MIT
 //
 // The kernel side. This tiny program is attached to the execve() tracepoint,
 // so it runs every time any process on the machine launches a new program.

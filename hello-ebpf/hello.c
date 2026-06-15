@@ -1,4 +1,4 @@
-// SPDX-License-Identifier: (LGPL-2.1 OR BSD-2-Clause)
+// SPDX-License-Identifier: MIT
 //
 // The user side (loader). It loads the eBPF program into the kernel
 // (the verifier checks it), attaches it to the execve tracepoint, then

@@ -6,6 +6,12 @@ monitoring for traditional-industry ERP systems).
 
 Everything here is **CO-RE + libbpf**, built to run on a modern Linux kernel (5.8+ with BTF).
 
+## Related articles
+
+- **What is eBPF, Really? A Builder's Mental Model** (EN, dev.to) — https://dev.to/hyperredstart/what-is-ebpf-really-a-builders-mental-model-4mj2
+- **eBPF 到底是什麼？一套給開發者的思考模型** (中文, blog) — https://hyperredstart.github.io/posts/what-is-ebpf/
+
+
 ## What's inside
 
 | Path | What it is |

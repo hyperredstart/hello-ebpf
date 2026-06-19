@@ -1,0 +1,4 @@
+.DS_Store
+
+# cbpf-vs-ebpf demo build output
+cbpf-vs-ebpf/seccomp_sandbox

@@ -1,0 +1,48 @@
+# eBPF 開發 VM — 在 Mac 編輯、在 Linux 編譯/執行。
+# 用法：  limactl start --name=ebpf-dev /Users/corey_lai/Documents/article/ebpf/hello-ebpf/lima-ebpf-dev.yaml
+# 進入：  limactl shell ebpf-dev
+# Ubuntu 24.04 LTS（kernel 6.8，內建 BTF，CO-RE 可用）。Apple Silicon 用 vz + virtiofs。
+
+vmType: "vz"
+os: "Linux"
+
+images:
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-arm64.img"
+    arch: "aarch64"
+  - location: "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-amd64.img"
+    arch: "x86_64"
+
+# 精簡又夠用的規格（disk 是 sparse 上限，實際起步約 5–6GB；memory 是 RAM 不佔硬碟）
+cpus: 2
+memory: "4GiB"
+disk: "20GiB"
+
+# 自動掛載你的 eBPF 程式碼（可寫）→ 在 Mac 改、在 VM 直接 make。快速 virtiofs。
+mountType: "virtiofs"
+mounts:
+  - location: "~/Documents/article/ebpf"
+    writable: true
+
+provision:
+  - mode: system
+    script: |
+      #!/bin/bash
+      set -eux -o pipefail
+      export DEBIAN_FRONTEND=noninteractive
+      apt-get update -y
+      # eBPF 工具鏈：clang/LLVM、libbpf、bpftool、bpftrace、pahole(dwarves，產 vmlinux.h)
+      apt-get install -y \
+        clang llvm libbpf-dev libelf-dev zlib1g-dev make pkg-config git \
+        bpftrace dwarves linux-tools-common linux-tools-generic
+      apt-get install -y "linux-tools-$(uname -r)" || true
+      # CO-RE 需要 BTF——驗證一下
+      if [ -r /sys/kernel/btf/vmlinux ]; then echo "[provision] BTF: OK"; else echo "[provision] BTF: MISSING"; fi
+      echo "[provision] toolchain ready: $(clang --version | head -1)"
+
+message: |
+  ✅ eBPF 開發 VM 就緒。
+    進入：      limactl shell ebpf-dev
+    你的程式碼：~/Documents/article/ebpf  (已掛載、可寫)
+    編譯範例：  cd ~/Documents/article/ebpf/hello-ebpf && make && sudo ./hello
+    冒煙測試：  sudo bpftrace -e 'tracepoint:syscalls:sys_enter_execve { printf("%s\n", comm); }'
+    不用時：    limactl stop ebpf-dev      （釋放 RAM/CPU，磁碟保留）

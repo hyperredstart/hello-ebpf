@@ -42,7 +42,7 @@ provision:
 message: |
   ✅ eBPF 開發 VM 就緒。
     進入：      limactl shell ebpf-dev
-    你的程式碼：~/Documents/article/ebpf  (已掛載、可寫)
-    編譯範例：  cd ~/Documents/article/ebpf/hello-ebpf && make && sudo ./hello
+    你的程式碼：/Users/corey_lai/Documents/article/ebpf  (掛載在與主機相同的絕對路徑、可寫，不在 ~ 底下)
+    編譯範例：  cd /Users/corey_lai/Documents/article/ebpf/hello-ebpf && make && sudo ./hello
     冒煙測試：  sudo bpftrace -e 'tracepoint:syscalls:sys_enter_execve { printf("%s\n", comm); }'
     不用時：    limactl stop ebpf-dev      （釋放 RAM/CPU，磁碟保留）

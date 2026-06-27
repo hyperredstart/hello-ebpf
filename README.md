@@ -17,6 +17,9 @@ Everything here is **CO-RE + libbpf**, built to run on a modern Linux kernel (5.
 | Path | What it is |
 |------|------------|
 | [`hello-ebpf/`](./hello-ebpf) | The "hello world" of eBPF — trace every `execve()` on the machine in real time (tracepoint → ring buffer → user space). Start here. |
+| [`cbpf-vs-ebpf/`](./cbpf-vs-ebpf) | A real-world contrast: cBPF (seccomp) **enforces** a no-network sandbox, while eBPF (bpftrace) **observes** socket activity system-wide. |
+| [`proc-vs-ebpf/`](./proc-vs-ebpf) | A runnable benchmark: collecting the same CPU stats by polling `/proc/stat` vs a **BPF timer → map** collector, measured fairly (mean±sd, the softirq `run_time_ns` trap). |
+| [`lima-ebpf-dev.yaml`](./lima-ebpf-dev.yaml) | A one-command [Lima](https://lima-vm.io) eBPF dev VM (Ubuntu 24.04, kernel 6.8, BTF + toolchain provisioned). |
 | [`setup-ebpf-mac.sh`](./setup-ebpf-mac.sh) | One command to get a working eBPF dev VM on macOS (Multipass or Lima). `./setup-ebpf-mac.sh [multipass\|lima]` |
 
 ## Quick start

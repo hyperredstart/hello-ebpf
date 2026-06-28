@@ -18,6 +18,7 @@ enum { ST_USER, ST_NICE, ST_SYSTEM, ST_IDLE, ST_IOWAIT, NR_FIELDS };
 struct cpu_sample {
 	unsigned long long ts_ns;                 /* when this snapshot was taken */
 	unsigned int       nr_cpus;               /* how many cpu[] rows are valid */
+	unsigned long long kern_ns;               /* cumulative softirq ns spent in the BPF timer callback */
 	unsigned long long cpu[MAX_CPUS][NR_FIELDS];
 };
 

@@ -18,7 +18,7 @@ LIBBPF_CFLAGS := $(shell pkg-config --cflags libbpf 2>/dev/null)
 LIBBPF_LIBS   := $(shell pkg-config --libs   libbpf 2>/dev/null || echo -lbpf)
 
 .PHONY: all clean
-all: proc_poller ebpf_collector
+all: proc_poller ebpf_collector proc_pids ebpf_pids
 
 # --- the /proc poller (pure user space) ---
 proc_poller: proc_poller.c common.h
@@ -37,5 +37,19 @@ cpustat.skel.h: cpustat.bpf.o
 ebpf_collector: ebpf_collector.c cpustat.skel.h common.h
 	$(CC) -g -O2 -Wall $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LIBS) -lelf -lz
 
+# --- per-PID scenario: scan /proc/<pid>/stat  vs  sched_switch -> hash map ---
+proc_pids: proc_pids.c
+	$(CC) -g -O2 -Wall $< -o $@
+
+task.bpf.o: task.bpf.c vmlinux.h
+	$(CLANG) -g -O2 -target bpf -D__TARGET_ARCH_$(ARCH) $(LIBBPF_CFLAGS) -c $< -o $@
+
+task.skel.h: task.bpf.o
+	$(BPFTOOL) gen skeleton $< > $@
+
+ebpf_pids: ebpf_pids.c task.skel.h
+	$(CC) -g -O2 -Wall $(LIBBPF_CFLAGS) $< -o $@ $(LIBBPF_LIBS) -lelf -lz
+
 clean:
-	rm -f proc_poller ebpf_collector cpustat.bpf.o cpustat.skel.h vmlinux.h
+	rm -f proc_poller ebpf_collector proc_pids ebpf_pids \
+	      cpustat.bpf.o cpustat.skel.h task.bpf.o task.skel.h vmlinux.h

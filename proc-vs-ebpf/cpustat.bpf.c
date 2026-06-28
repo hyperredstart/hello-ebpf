@@ -9,9 +9,11 @@
 // map entry per interval.
 //
 // Why this matters for the benchmark: the timer runs in softirq, so its CPU is
-// NOT charged to the reader process/cgroup. That's why the harness also adds
-// this program's own run_time_ns (kernel.bpf_stats_enabled) — counting only the
-// reader would undercount eBPF. See README + the article ("the trap").
+// NOT charged to the reader process/cgroup. (And bpf_timer callbacks don't update
+// run_time_ns/bpf_stats — the kernel calls them directly.) So the callback
+// *self-times* with bpf_ktime_get_ns() and accumulates into sample.kern_ns; the
+// harness adds that to the reader's CPU. Counting only the reader would undercount
+// eBPF. See README + the article ("the trap").
 //
 // Needs: BTF, bpf_timer (Linux 5.15+), bpf_per_cpu_ptr (5.13+), SEC("syscall")
 // (5.14+). Ubuntu 24.04 / kernel 6.8 (the Lima dev VM) is fine.
@@ -20,6 +22,11 @@
 #include <bpf/bpf_helpers.h>
 #include <bpf/bpf_core_read.h>
 #include "common.h"
+
+/* vmlinux.h (BTF) doesn't define this; bpf_timer_init() wants the clock id. */
+#ifndef CLOCK_MONOTONIC
+#define CLOCK_MONOTONIC 1
+#endif
 
 char LICENSE[] SEC("license") = "GPL";   /* bpf_per_cpu_ptr + timers are GPL-only */
 
@@ -53,6 +60,7 @@ struct {
 /* The timer callback: runs in softirq every interval. */
 static int snapshot(void *map, __u32 *key, struct timer_val *tv)
 {
+	__u64 t0 = bpf_ktime_get_ns();
 	const struct kernel_cpustat *kcs;
 	struct cpu_sample *s;
 	__u32 zero = 0, i;
@@ -61,7 +69,7 @@ static int snapshot(void *map, __u32 *key, struct timer_val *tv)
 	if (!s)
 		return 0;
 
-	s->ts_ns = bpf_ktime_get_ns();
+	s->ts_ns = t0;
 
 	/* Written field-by-field with no lock, so user space can observe a torn
 	 * snapshot. That's immaterial here: the benchmark measures collection
@@ -73,13 +81,19 @@ static int snapshot(void *map, __u32 *key, struct timer_val *tv)
 		kcs = bpf_per_cpu_ptr(&kernel_cpustat, i);
 		if (!kcs)
 			break;
-		s->cpu[i][ST_USER]   = BPF_CORE_READ(kcs, cpustat[CPUTIME_USER]);
-		s->cpu[i][ST_NICE]   = BPF_CORE_READ(kcs, cpustat[CPUTIME_NICE]);
-		s->cpu[i][ST_SYSTEM] = BPF_CORE_READ(kcs, cpustat[CPUTIME_SYSTEM]);
-		s->cpu[i][ST_IDLE]   = BPF_CORE_READ(kcs, cpustat[CPUTIME_IDLE]);
-		s->cpu[i][ST_IOWAIT] = BPF_CORE_READ(kcs, cpustat[CPUTIME_IOWAIT]);
+		/* kcs is a trusted PTR_TO_BTF_ID from bpf_per_cpu_ptr(); the verifier
+		 * relocates these direct reads (CO-RE) — no bpf_probe_read needed. */
+		s->cpu[i][ST_USER]   = kcs->cpustat[CPUTIME_USER];
+		s->cpu[i][ST_NICE]   = kcs->cpustat[CPUTIME_NICE];
+		s->cpu[i][ST_SYSTEM] = kcs->cpustat[CPUTIME_SYSTEM];
+		s->cpu[i][ST_IDLE]   = kcs->cpustat[CPUTIME_IDLE];
+		s->cpu[i][ST_IOWAIT] = kcs->cpustat[CPUTIME_IOWAIT];
 		s->nr_cpus = i + 1;
 	}
+
+	/* Self-time this softirq callback so user space can account the kernel-side
+	 * cost (bpf_timer callbacks don't update run_time_ns / bpf_stats). */
+	s->kern_ns += bpf_ktime_get_ns() - t0;
 
 	/* Re-arm for the next interval. */
 	bpf_timer_start(&tv->t, interval_ns, 0);

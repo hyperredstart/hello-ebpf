@@ -1,6 +1,9 @@
 # generated build artifacts
 vmlinux.h
 cpustat.skel.h
+task.skel.h
 *.o
 proc_poller
 ebpf_collector
+proc_pids
+ebpf_pids

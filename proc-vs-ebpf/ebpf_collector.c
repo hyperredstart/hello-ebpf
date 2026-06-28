@@ -33,9 +33,11 @@ int main(int argc, char **argv)
 {
 	unsigned long interval_ms = 1000;
 	bool quiet = false;
+	const char *kern_ns_file = NULL;
 	struct cpustat_bpf *skel = NULL;
 	struct cpu_sample cur, prev;
 	bool have_prev = false;
+	FILE *kf = NULL;
 	__u32 zero = 0;
 	int err;
 
@@ -44,10 +46,13 @@ int main(int argc, char **argv)
 			interval_ms = strtoul(argv[++i], NULL, 10);
 		else if (!strcmp(argv[i], "--quiet"))
 			quiet = true;
-		else { fprintf(stderr, "usage: %s [--interval-ms N] [--quiet]\n", argv[0]); return 2; }
+		else if (!strcmp(argv[i], "--kern-ns-file") && i + 1 < argc)
+			kern_ns_file = argv[++i];   /* harness reads cumulative softirq ns from here */
+		else { fprintf(stderr, "usage: %s [--interval-ms N] [--quiet] [--kern-ns-file PATH]\n", argv[0]); return 2; }
 	}
 
-	libbpf_set_print(NULL);
+	if (!getenv("PVB_VERBOSE"))
+		libbpf_set_print(NULL);   /* run with PVB_VERBOSE=1 to see libbpf/verifier logs */
 	signal(SIGINT, on_signal);
 	signal(SIGTERM, on_signal);
 
@@ -68,6 +73,10 @@ int main(int argc, char **argv)
 		goto out;
 	}
 
+	if (kern_ns_file) {
+		kf = fopen(kern_ns_file, "w");
+		if (!kf) fprintf(stderr, "warning: cannot open %s for kern-ns\n", kern_ns_file);
+	}
 	if (!quiet)
 		printf("# eBPF collector: BPF timer -> map every %lu ms. Ctrl-C to stop.\n", interval_ms);
 
@@ -77,6 +86,9 @@ int main(int argc, char **argv)
 		err = bpf_map__lookup_elem(skel->maps.samples, &zero, sizeof(zero),
 					   &cur, sizeof(cur), 0);
 		if (err) { fprintf(stderr, "map lookup failed: %d\n", err); break; }
+
+		/* Publish the cumulative self-timed softirq ns for the harness. */
+		if (kf) { rewind(kf); fprintf(kf, "%llu\n", cur.kern_ns); fflush(kf); }
 
 		if (have_prev && !quiet) {
 			unsigned long long busy = 0, total = 0;
@@ -95,6 +107,7 @@ int main(int argc, char **argv)
 
 	err = 0;
 out:
+	if (kf) fclose(kf);
 	cpustat_bpf__destroy(skel);   /* destroying the map cancels the timer */
 	return err ? 1 : 0;
 }

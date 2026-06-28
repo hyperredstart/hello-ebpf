@@ -45,7 +45,7 @@ sudo ./ebpf_collector --interval-ms 1000     # busy% from the BPF-timer snapshot
 | Concern | What the harness does |
 |---|---|
 | Precision | reads each collector's **`CPUUsageNSec`** from its own transient `systemd` unit (nanoseconds), not coarse `/proc` ticks |
-| **The trap** | the BPF timer runs in **softirq**, so its CPU is *not* in the reader's unit — `bench.sh` adds the programs' **`run_time_ns`** (`kernel.bpf_stats_enabled=1`). Counting only the reader would flatter eBPF |
+| **The trap** | the BPF timer runs in **softirq**, so its CPU is *not* in the reader's unit. The callback **self-times** (`bpf_ktime_get_ns`) into the map; the collector writes that cumulative ns to `--kern-ns-file` and `bench.sh` adds it to the reader's CPU. (`bpf_timer` callbacks don't update `run_time_ns`, so `bpf_stats` can't see them.) Counting only the reader would flatter eBPF |
 | Equal work | both collect the same per-CPU columns (user/nice/system/idle/iowait) at the same interval |
 | Noise | runs are **interleaved + order-alternated**, a warm-up window is discarded, results are **mean ± stddev**, and **steal time** is reported |
 | Operating point | measured **@ idle** and **@ load** (`stress-ng`) so you can see whether the gap holds |
@@ -59,8 +59,8 @@ article says. The relative gap (eBPF cheaper per sample) is the robust part.
 
 - Linux with **BTF**, kernel **5.15+** (BPF timer) — Ubuntu 24.04 / 6.8 is fine.
 - `clang llvm libbpf-dev libelf-dev zlib1g-dev pkg-config linux-tools-$(uname -r) make`
-  (all preinstalled by [`../lima-ebpf-dev.yaml`](../lima-ebpf-dev.yaml)); `bpftool`,
-  `python3`, `systemd` for the harness; `stress-ng` optional for the load row.
+  (all preinstalled by [`../lima-ebpf-dev.yaml`](../lima-ebpf-dev.yaml)); `bpftool`
+  for the build; `systemd` for the harness; `stress-ng` optional for the load row.
 
 ## Files
 
@@ -78,7 +78,9 @@ article says. The relative gap (eBPF cheaper per sample) is the robust part.
 - **`load failed` / verifier error** — paste the output; the most version-sensitive
   bits are `bpf_per_cpu_ptr(&kernel_cpustat)` and the `bpf_timer`. Confirm
   `/sys/kernel/btf/vmlinux` exists and the kernel is 5.15+.
-- **eBPF kernel ns reads 0** — check the program names with `bpftool prog show`;
-  if the timer callback isn't named `snapshot`, update `OUR_PROGS` in `bench.sh`.
+- **eBPF kernel ns reads 0** — the callback self-times into `--kern-ns-file`, so 0
+  usually means the timer never fired. Run `sudo PVB_VERBOSE=1 ./ebpf_collector
+  --interval-ms 1000` and confirm it prints changing `busy=…%` (timer firing) and
+  that arming didn't fail.
 
 MIT/GPL per file headers — use freely.
